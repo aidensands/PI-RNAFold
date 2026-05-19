@@ -6,7 +6,10 @@ import multiprocessing
 import argparse
 import logging
 from logging.handlers import QueueHandler, QueueListener
+import gzip
+import shutil
 import os
+import sys
 
 
 def batch_iterator(iterator, batch_size = 100):
@@ -26,7 +29,7 @@ def batch_iterator(iterator, batch_size = 100):
         yield batch
 
 
-def fold_fasta(batch, proc_id):
+def fold_fasta(batch, proc_id) -> pd.DataFrame:
     """ This function takes a batch of sequences and folds them using RNAFold, returning a dataframe with the sequence id, sequence, and predicted secondary structure"""
     solved_seqs = []
     for record in batch:
@@ -58,7 +61,7 @@ def main(args):
     listener = QueueListener(log_queue, handler)
     listener.start()
 
-    if not file_path:
+    if not os.path.exists(file_path):
         logging.critical('No Files were found at the specified path, this error is not recoverable, exiting now')
         raise FileNotFoundError
 
@@ -83,9 +86,33 @@ def main(args):
         for future in futures:
             dfs.append(future.result())
 
-        
+    listener.stop()
+
     dataset = pd.concat(dfs)
-    dataset.to_csv(args.o)
+
+    if '.csv' in args.o:
+        dataset.to_csv(args.o)
+    elif '.tsv' in args.o:
+        dataset.to_csv(args.o, sep='\t', index=False)
+    elif '.json' in args.o:
+        dataset.to_json(args.o)
+    elif '.parquet' in args.o:
+        dataset.to_parquet(args.o)
+
+
+    if args.g and '.parquet' in args.o:
+        logging.warning('Parquet output selected but gzip compression flag raised, gzip compression will be skipped')
+        sys.exit(2)
+
+
+    if args.g:
+        
+        with open(args.o, 'rb') as input_stream:
+            with gzip.open(f'{args.o}.gz', 'wb') as output_stream:
+                shutil.copyfileobj(input_stream, output_stream)
+        
+        if os.path.exists(args.o):
+            os.remove(args.o)
 
 
 if __name__ == '__main__':
@@ -97,8 +124,9 @@ if __name__ == '__main__':
 
     parser.add_argument('-f', help='the directory containing fasta files', required=False, default='/home/FCAM/asands/projects/nonb/fasta/SGNex_Hct116_directRNA_replicate1_run1.fasta')
     parser.add_argument('-c', help='number of parallel processes to run folds with, default is 4', default=4, required=False, type=int)
-    parser.add_argument('-o', help='the output file in txt format', default='output.csv')
+    parser.add_argument('-o', help='the output file in txt format, supports .csv, .tsv, .json, and .parquet', default='output.csv')
     parser.add_argument('-v', help='determines the level of output from the script, adding this flag will print all thread logs', action='store_true')
+    parser.add_argument('-g', help='optional flag to trigger gzip compression, this will not work if parquet format is already selected', action='store_true')
 
     arglist = parser.parse_args()
 
