@@ -11,3 +11,15 @@ python rnafold.py \
     -v [Raise this flag for verbose output (no parameter needed)]
 ```
 
+## Effeciency
+This script avoids the dangers of concurrent processing by using Python's pre-existing concurrency libraries. More specifically all processes are handled by a ProcessPoolExecuter scheduler that prevents us from having to worry about shared memory race conditions. The official implementation of ViennaRNA's RNAFold is:
+
+$$O(N \cdot L^3)$$
+$$N:\text{ Number of Sequences}$$
+$$L: \text{ Length of Sequence}$$
+
+The new parallel implementation's speedup is dependant on your resources, making it especially useful for teams working in an HPC environment:
+$$O(\frac{N\cdot L^3}{P})$$
+$$N:\text{ Number of Sequences}$$
+$$L: \text{ Length of Sequence}$$
+$$P: \text{ Number of Processor Cores}$$
