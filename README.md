@@ -19,6 +19,7 @@ $$N:\text{ Number of Sequences}$$
 $$L: \text{ Length of Sequence}$$
 
 The new parallel implementation's speedup is dependant on your resources, making it especially useful for teams working in an HPC environment:
+
 $$O(\frac{N\cdot L^3}{P})$$
 $$N:\text{ Number of Sequences}$$
 $$L: \text{ Length of Sequence}$$
