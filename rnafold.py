@@ -2,9 +2,10 @@ import pandas as pd
 import RNA
 from Bio import SeqIO
 from concurrent.futures import ProcessPoolExecutor
-import glob
+import multiprocessing
 import argparse
 import logging
+from logging.handlers import QueueHandler, QueueListener
 import os
 
 
@@ -37,42 +38,50 @@ def fold_fasta(batch, proc_id):
     logging.info(f'Worker: {proc_id} has finished a {len(batch)} sequence batch and is exiting')
     return df
     
+def worker_init(log_queue):
+    qh = QueueHandler(log_queue)
+    root = logging.getLogger()
+    root.handlers = []
+    root.addHandler(qh)
+    root.setLevel(logging.INFO)
 
 def main(args):
     n_workers = args.c
-    file_glob = glob.glob(args.d + '*.fasta')
+    file_path = args.f
     batches = []
     futures = []
     dfs = []
+    log_queue = multiprocessing.Queue()
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s %(process)d %(levelname)s: %(message)s')
+    handler.setFormatter(formatter)
+    listener = QueueListener(log_queue, handler)
+    listener.start()
 
-    if not file_glob:
+    if not file_path:
         logging.critical('No Files were found at the specified path, this error is not recoverable, exiting now')
         raise FileNotFoundError
 
     if os.cpu_count() < args.c:
         logging.warning(f'CPU has less cores than requested, surplus processes will be queued, REQUESTED={args.c}, AVAIL={os.cpu_count()} \n')
 
-    for file in file_glob:
         
-        with open(file) as f:
-            
-            for n, batch in enumerate(batch_iterator(SeqIO.parse(open(file), 'fasta'))):
-                batches.append(batch)
-            
-            with ProcessPoolExecutor(max_workers=n_workers) as scheduler:
-                logging.info('Scheduling Jobs')
-                n = 0
-                for i in range(len(batches)):
-                    futures.append(scheduler.submit(fold_fasta, batches[i], n))
-                    logging.info(f'Queued Worker {n} and assigned {len(batches[i])} sequences to fold')
-                    n += 1
-                    
-                for future in futures:
-                    dfs.append(future.result())
+    with open(file_path) as f:
         
-            f.close()
+        for n, batch in enumerate(batch_iterator(SeqIO.parse(f, 'fasta'))):
+            batches.append(batch)
         
-        batches.clear()
+    with ProcessPoolExecutor(max_workers=n_workers, initializer=worker_init, initargs=(log_queue, )) as scheduler:
+        
+        logging.info('Scheduling Jobs')
+        n = 0
+        for i in range(len(batches)):
+            futures.append(scheduler.submit(fold_fasta, batches[i], n))
+            logging.info(f'Queued Worker {n} and assigned {len(batches[i])} sequences to fold')
+            n += 1
+
+        for future in futures:
+            dfs.append(future.result())
 
         
     dataset = pd.concat(dfs)
@@ -86,7 +95,7 @@ if __name__ == '__main__':
         description='a cli wrapper for Vienna RNAFold for RNA secondary structure predictions using MFE estimations'
     )
 
-    parser.add_argument('-d', help='the directory containing fasta files', required=False, default='/home/FCAM/asands/projects/nonb/fasta/SGNex_Hct116_directRNA_replicate1_run1.fasta')
+    parser.add_argument('-f', help='the directory containing fasta files', required=False, default='/home/FCAM/asands/projects/nonb/fasta/SGNex_Hct116_directRNA_replicate1_run1.fasta')
     parser.add_argument('-c', help='number of parallel processes to run folds with, default is 4', default=4, required=False, type=int)
     parser.add_argument('-o', help='the output file in txt format', default='output.csv')
     parser.add_argument('-v', help='determines the level of output from the script, adding this flag will print all thread logs', action='store_true')
