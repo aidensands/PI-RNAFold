@@ -67,7 +67,8 @@ def main(args):
 
     if os.cpu_count() < args.c:
         logging.warning(f'CPU has less cores than requested, surplus processes will be queued, REQUESTED={args.c}, AVAIL={os.cpu_count()} \n')
-
+    elif os.cpu_count() is None:
+        logging.warning(f'Unable to determine number of CPU cores, proceeding with requested number of processes, REQUESTED={args.c} \n')
         
     with open(file_path) as f:
         
