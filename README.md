@@ -1,5 +1,5 @@
 # PI-RNAFold
-This is a parallel implementation of ViennaRNA's RNAFold. Since the existing tool is CPU bound, this script dramatically speeds up compute time using multiple CPU cores. All credit goes to the creators of ViennaRNA 
+This is a parallel implementation of ViennaRNA's RNAFold. Since the existing tool is CPU bound, this script dramatically speeds up compute time using multiple CPU cores. All credit goes to the creators of ViennaRNA.
 
 ## Usage
 To use this tool as intended you must have your sequences in .fasta/.fa format. The command to run PI-RNAFold is as follows:
@@ -19,7 +19,7 @@ $$O(N \cdot L^3)$$
 $$N:\text{ Number of Sequences}$$
 $$L: \text{ Length of Sequence}$$
 
-The new parallel implementation's speedup is dependant on your resources, making it especially useful for teams working in an HPC environment:
+The new parallel implementation's speedup is dependant on your resources, making it especially useful for teams working in an HPC environment. The new complexity is embarassingly parallel and thus its complexity is listed below:
 
 $$O(\frac{N\cdot L^3}{P})$$
 $$N:\text{ Number of Sequences}$$
