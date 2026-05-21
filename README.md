@@ -1,6 +1,15 @@
 # PI-RNAFold
 This is a parallel implementation of ViennaRNA's RNAFold. Since the existing tool is CPU bound, this script dramatically speeds up compute time using multiple CPU cores. All credit goes to the creators of ViennaRNA.
 
+## Installation
+To remotely download the script ensure that you have Python installed and the use:
+```
+git clone https://github.com/aidensands/PI-RNAFold.git
+```
+Then, install the scripts requirements using 
+```
+pip install -r requirements.txt
+```
 ## Usage
 To use this tool as intended you must have your sequences in .fasta/.fa format. The command to run PI-RNAFold is as follows:
 ```
