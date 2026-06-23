@@ -1,0 +1,89 @@
+use needletail::parse_fastx_file;
+use clap::Parser;
+use rayon::prelude::*;
+use std::ffi::{CStr, CString, c_char};
+use std::path::PathBuf;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long)]
+    filepath: PathBuf,
+    #[arg(short, long)]
+    cores: usize,
+    #[arg(short, long)]
+    verbose: bool,
+}
+
+struct SolvedSeq {
+    ss:String,
+    mfe:f32,
+}
+
+impl SolvedSeq {
+    fn new(ss:String, mfe:f32) -> Self {
+        Self {ss, mfe}
+    }
+}
+
+unsafe extern "C" {
+    unsafe fn fold(seq: *const c_char, structure: *mut c_char) -> f32;
+}
+
+fn rfold(seqs: &Vec<String>) -> Vec<SolvedSeq> {
+    let mut solved_seqs: Vec<SolvedSeq> = Vec::new();
+
+    for seq in seqs {
+        // Conversion for C Code 
+        let processed_string = CString::new(seq as &str)
+        .expect("Error converting Rust String to CString");
+        let mut ss_buffer = vec![0u8; seq.as_bytes().len() + 1];
+        // RNAFold Thermo Calculations
+        let mfe = unsafe {
+            fold(processed_string.as_ptr(), ss_buffer.as_mut_ptr() as *mut c_char)
+        };
+        let c_stucture: &CStr = unsafe {
+            CStr::from_ptr(ss_buffer.as_ptr() as *mut c_char)
+        };
+
+        // Load Solution
+        let ss_string: String = c_stucture.to_string_lossy().into_owned();
+        let solved = SolvedSeq::new(ss_string, mfe);
+
+        println!("Folded a seq");
+        solved_seqs.push(solved);
+    }
+
+    return solved_seqs;
+}
+
+fn main() {
+    let args = Args::parse();
+
+    // Configure the ThreadPool
+    rayon::ThreadPoolBuilder::new()
+    .num_threads(args.cores)
+    .build_global()
+    .expect("ThreadPool Initialization Error");
+
+    if args.verbose {
+        println!("Starting RNAFold with {} cores", args.cores)
+    }
+
+    let path: &PathBuf = &args.filepath;
+    let mut reader = parse_fastx_file(path)
+    .expect("NeedleTail Reader Recieved Ivalid Filepath");
+
+    let mut sequences: Vec<String> = Vec::new();
+
+    while let Some(record) = reader.next() {        
+        // Processing raw bytes to CString format
+        let record= record
+        .expect("Recieved Invalid Sequence in fasta");
+        let stringrecord: String = String::from_utf8(record.seq().into_owned())
+        .expect("Invalid UTF-8 bytes recieved");
+        sequences.push(stringrecord);
+    }
+
+    let data = rfold(&sequences);
+}

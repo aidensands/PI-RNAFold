@@ -16,15 +16,13 @@ def batch_iterator(iterator, batch_size = 100):
     """ This function builds a generator that can be iterated through
         it contains sequence batches of size 'batch_size'
     """
-    batch = list()
+    batch = []
 
     for entry in iterator:
-    
-        batch.append(entry)
+        batch.append({'id':entry.id, 'seq':str(entry.seq)})
         if len(batch) == batch_size:
             yield batch
             batch = []
-    
     if batch:
         yield batch
 
@@ -32,10 +30,12 @@ def batch_iterator(iterator, batch_size = 100):
 def fold_fasta(batch, proc_id) -> pd.DataFrame:
     """ This function takes a batch of sequences and folds them using RNAFold, returning a dataframe with the sequence id, sequence, and predicted secondary structure"""
     solved_seqs = []
-    for record in batch:
-       (ss, mfe) = RNA.fold(str(record.seq))
-       solved_seqs.append({'id':record.id, 'seq':record.seq, 'ss':ss, 'mfe':mfe})
-       logging.info(f'Worker {proc_id} has folded a sequence')
+    for i, record in enumerate(batch):
+       (ss, mfe) = RNA.fold(record['seq'])
+       solved_seqs.append({'id':record['id'], 'seq':record['seq'], 'ss':ss, 'mfe':mfe})
+       progress = (i / len(batch))
+       if i % 10 == 0:
+           logging.info(f'Worker {proc_id} is {(progress * 100):.2f}% finished')
     
     df = pd.DataFrame(solved_seqs)
     logging.info(f'Worker: {proc_id} has finished a {len(batch)} sequence batch and is exiting')
@@ -51,7 +51,6 @@ def worker_init(log_queue):
 def main(args):
     n_workers = args.c
     file_path = args.f
-    batches = []
     futures = []
     dfs = []
     log_queue = multiprocessing.Queue()
@@ -71,21 +70,17 @@ def main(args):
         logging.warning(f'Unable to determine number of CPU cores, proceeding with requested number of processes, REQUESTED={args.c} \n')
         
     with open(file_path) as f:
-        
-        for n, batch in enumerate(batch_iterator(SeqIO.parse(f, 'fasta'))):
-            batches.append(batch)
-        
-    with ProcessPoolExecutor(max_workers=n_workers, initializer=worker_init, initargs=(log_queue, )) as scheduler:
-        
-        logging.info('Scheduling Jobs')
-        n = 0
-        for i in range(len(batches)):
-            futures.append(scheduler.submit(fold_fasta, batches[i], n))
-            logging.info(f'Queued Worker {n} and assigned {len(batches[i])} sequences to fold')
-            n += 1
+        with ProcessPoolExecutor(max_workers=n_workers, initializer=worker_init, initargs=(log_queue, )) as scheduler:
 
-        for future in futures:
-            dfs.append(future.result())
+            logging.info('Scheduling Jobs')
+            n = 0
+            for n, batch in enumerate(batch_iterator(SeqIO.parse(f, 'fasta'))):
+                futures.append(scheduler.submit(fold_fasta, batch, n))
+                logging.info(f'Queued Worker {n} and assigned {len(batch)} sequences to fold')
+                n += 1
+
+            for future in futures:
+                dfs.append(future.result())
 
     listener.stop()
 
