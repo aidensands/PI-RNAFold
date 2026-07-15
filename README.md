@@ -2,7 +2,7 @@
 This is a parallel implementation of ViennaRNA's RNAFold. Since the existing tool is CPU bound, this script dramatically speeds up compute time using multiple CPU cores. All credit goes to the creators of ViennaRNA.
 
 ## New
-I'm currently migrating this codebase to Rust! The python section of the code is still perfectly functional and recently recieved memory performance improvements. If you wish to use the python version still or the rust version is not
+I'm currently migrating this codebase to Rust (still a work in progress)! The python section of the code is still perfectly functional and recently recieved memory performance improvements. If you wish to use the python version still or the rust version is not
 ready yet, all you have to do is cd into the python folder or run the script using:
 ```
 python legacy/rnafold.py --help
