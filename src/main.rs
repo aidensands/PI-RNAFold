@@ -1,8 +1,10 @@
 use needletail::parse_fastx_file;
 use clap::Parser;
 use rayon::prelude::*;
+use core::fmt;
 use std::ffi::{CStr, CString, c_char};
 use std::path::PathBuf;
+use std::fmt::{write};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -26,35 +28,36 @@ impl SolvedSeq {
     }
 }
 
+impl fmt::Display for SolvedSeq {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(db: {}, mfe:{})", self.ss, self.mfe)
+    }
+}
+
 unsafe extern "C" {
-    unsafe fn fold(seq: *const c_char, structure: *mut c_char) -> f32;
+    unsafe fn vrna_fold(seq: *const c_char, structure: *mut c_char) -> f32;
 }
 
 fn rfold(seqs: &Vec<String>) -> Vec<SolvedSeq> {
-    let mut solved_seqs: Vec<SolvedSeq> = Vec::new();
+    seqs.par_iter()
+        .map(|seq| {
+            let processed_string = CString::new(seq.as_str())
+            .expect("Error converting Rust String to CString");
+            let mut ss_buffer = vec![0u8; seq.as_bytes().len() + 1];
+            // RNAFold Thermo Calculations
+            let mfe = unsafe {
+                vrna_fold(processed_string.as_ptr(), ss_buffer.as_mut_ptr() as *mut c_char)
+            };
+            let c_stucture: &CStr = unsafe {
+                CStr::from_ptr(ss_buffer.as_ptr() as *const c_char)
+            };
 
-    for seq in seqs {
-        // Conversion for C Code 
-        let processed_string = CString::new(seq as &str)
-        .expect("Error converting Rust String to CString");
-        let mut ss_buffer = vec![0u8; seq.as_bytes().len() + 1];
-        // RNAFold Thermo Calculations
-        let mfe = unsafe {
-            fold(processed_string.as_ptr(), ss_buffer.as_mut_ptr() as *mut c_char)
-        };
-        let c_stucture: &CStr = unsafe {
-            CStr::from_ptr(ss_buffer.as_ptr() as *mut c_char)
-        };
-
-        // Load Solution
-        let ss_string: String = c_stucture.to_string_lossy().into_owned();
-        let solved = SolvedSeq::new(ss_string, mfe);
-
-        println!("Folded a seq");
-        solved_seqs.push(solved);
-    }
-
-    return solved_seqs;
+            // Load Solution
+            let ss_string: String = c_stucture.to_string_lossy().into_owned();
+            println!("Folded a seq");
+            SolvedSeq::new(ss_string, mfe)
+        })
+        .collect()
 }
 
 fn main() {
@@ -86,4 +89,9 @@ fn main() {
     }
 
     let data = rfold(&sequences);
+
+    for seq in data{
+        print!("{} \n", seq);
+    }
+
 }
