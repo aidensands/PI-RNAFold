@@ -2,24 +2,41 @@
 This is a parallel implementation of ViennaRNA's RNAFold. Since the existing tool is CPU bound, this script dramatically speeds up compute time using multiple CPU cores. All credit goes to the creators of ViennaRNA.
 
 ## New
-I'm currently migrating this codebase to Rust (still a work in progress)! The python section of the code is still perfectly functional and recently recieved memory performance improvements. If you wish to use the python version still or the rust version is not
-ready yet, all you have to do is cd into the python folder or run the script using:
+This codebase has just been migrated to Rust! PI-RNAFold has just recieved massive memory improvements and performance speedups from this migration. The python section of the code is still perfectly functional and recently recieved memory performance improvements. If you wish to use the python version, all you have to do is cd into the python folder or run the script using:
 ```
 python legacy/rnafold.py --help
 ```
 
+## Prerequisites:
+In order to use the rust version of PI-RNAFold correctly you must have the following prerequisites installed:
+- Rust
+- Cargo (natively installed with Rust)
+- The viennarna package, this can be done using any package manager or through an environment manager like conda by installing it into your active environment.
 
-## Installation
-To remotely download the script ensure that you have Python installed and the use:
+## Installation and Usage:
+Clone this repository using:
 ```
 git clone https://github.com/aidensands/PI-RNAFold.git
 ```
-Then, install the scripts requirements using 
+
+Compile the PI-RNAFold binary:
+
+```
+cargo build --release
+```
+The code will compile and an executable will be produced under `target/release/`. From here you are ready to go! Try running:
+
+```
+parallel_rnafold --help
+```
+
+## Legacy
+
 ```
 python -m venv [env name]
 pip install -r requirements.txt
 ```
-## Usage
+## Legacy Usage
 To use this tool as intended you must have your sequences in .fasta/.fa format. The command to run PI-RNAFold is as follows:
 ```
 python rnafold.py \
