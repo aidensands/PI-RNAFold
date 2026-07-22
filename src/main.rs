@@ -4,7 +4,6 @@ use rayon::prelude::*;
 use core::fmt;
 use std::ffi::{CStr, CString, c_char};
 use std::path::PathBuf;
-use std::fmt::{write};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -15,16 +14,19 @@ struct Args {
     cores: usize,
     #[arg(short, long)]
     verbose: bool,
+    #[arg(short, long)]
+    output: Option<PathBuf>
 }
 
 struct SolvedSeq {
+    id:String,
     ss:String,
     mfe:f32,
 }
 
 impl SolvedSeq {
-    fn new(ss:String, mfe:f32) -> Self {
-        Self {ss, mfe}
+    fn new(id:String, ss:String, mfe:f32) -> Self {
+        Self {id, ss, mfe}
     }
 }
 
@@ -38,12 +40,12 @@ unsafe extern "C" {
     unsafe fn vrna_fold(seq: *const c_char, structure: *mut c_char) -> f32;
 }
 
-fn rfold(seqs: &Vec<String>) -> Vec<SolvedSeq> {
+fn rfold(seqs: &Vec<(String, String)>, verbose: bool) -> Vec<SolvedSeq> {
     seqs.par_iter()
         .map(|seq| {
-            let processed_string = CString::new(seq.as_str())
+            let processed_string = CString::new(seq.0.as_str())
             .expect("Error converting Rust String to CString");
-            let mut ss_buffer = vec![0u8; seq.as_bytes().len() + 1];
+            let mut ss_buffer = vec![0u8; seq.0.as_bytes().len() + 1];
             // RNAFold Thermo Calculations
             let mfe = unsafe {
                 vrna_fold(processed_string.as_ptr(), ss_buffer.as_mut_ptr() as *mut c_char)
@@ -54,8 +56,12 @@ fn rfold(seqs: &Vec<String>) -> Vec<SolvedSeq> {
 
             // Load Solution
             let ss_string: String = c_stucture.to_string_lossy().into_owned();
-            println!("Folded a seq");
-            SolvedSeq::new(ss_string, mfe)
+
+            if verbose {
+                println!("Thread Folded Seq: {}", seq.1);
+            }
+
+            SolvedSeq::new(seq.1.clone(), ss_string, mfe)
         })
         .collect()
 }
@@ -77,7 +83,7 @@ fn main() {
     let mut reader = parse_fastx_file(path)
     .expect("NeedleTail Reader Recieved Ivalid Filepath");
 
-    let mut sequences: Vec<String> = Vec::new();
+    let mut sequences: Vec<(String, String)> = Vec::new();
 
     while let Some(record) = reader.next() {        
         // Processing raw bytes to CString format
@@ -85,13 +91,28 @@ fn main() {
         .expect("Recieved Invalid Sequence in fasta");
         let stringrecord: String = String::from_utf8(record.seq().into_owned())
         .expect("Invalid UTF-8 bytes recieved");
-        sequences.push(stringrecord);
+        let seqname = str::from_utf8(record.id())
+        .expect("Issue Loading Sequence ID");
+        sequences.push((stringrecord, seqname.to_owned()));
     }
 
-    let data = rfold(&sequences);
+    let data = rfold(&sequences, args.verbose);
 
-    for seq in data{
-        print!("{} \n", seq);
+    if let Some(output_path) = args.output {
+        let mut writer = csv::Writer::from_path(output_path)
+        .expect("Failed to create csv output writer");
+
+        writer.write_record(&["id", "structure", "mfe"])
+        .expect("Failed to write header record");
+
+        for seq in data {
+            writer.write_record(&[seq.id, seq.ss, seq.mfe.to_string()])
+            .expect("Failed to write data record");
+        }
+
+        writer.flush().expect("Failed to flush csv writer");
+
     }
 
 }
+
